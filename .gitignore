@@ -1,0 +1,20 @@
+# Airflow logs (pueden ser cientos de archivos)
+logs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Estado en tiempo de ejecución de la Data API
+data_api/data/timestamps.json
+
+# Claude Code
+.claude/
+
+# Variables de entorno locales
+.env
+
+# Sistema operativo
+.DS_Store
+Thumbs.db

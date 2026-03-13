@@ -1,0 +1,167 @@
+version: '3.8'
+
+# Configuracion comun que comparten todos los servicios de Airflow
+x-airflow-common: &airflow-common
+  image: apache/airflow:2.8.1
+  environment: &airflow-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-airflow/airflow
+    AIRFLOW__CORE__FERNET_KEY: 'ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg='
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
+    # Librerias de Python que necesitan los DAGs
+    _PIP_ADDITIONAL_REQUIREMENTS: 'psycopg2-binary boto3 scikit-learn pandas minio requests'
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./logs:/opt/airflow/logs
+    - ./plugins:/opt/airflow/plugins
+  depends_on:
+    postgres-airflow:
+      condition: service_healthy
+
+services:
+
+  # ─────────────────────────────────────────
+  # BASE DE DATOS DEL PROYECTO
+  # Guarda los datos del bosque en 3 etapas
+  # ─────────────────────────────────────────
+  postgres:
+    image: postgres:15
+    container_name: mlops_postgres
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: mlops_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init_db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "admin", "-d", "mlops_db"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+
+  # ─────────────────────────────────────────
+  # BASE DE DATOS INTERNA DE AIRFLOW
+  # Airflow necesita su propia base de datos
+  # para guardar el historial de ejecuciones
+  # ─────────────────────────────────────────
+  postgres-airflow:
+    image: postgres:15
+    container_name: mlops_postgres_airflow
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres_airflow_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+
+  # ─────────────────────────────────────────
+  # MINIO
+  # Almacena los modelos entrenados
+  # Interfaz web en http://localhost:9001
+  # ─────────────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: mlops_minio
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"   # API de MinIO (para subir/bajar archivos)
+      - "9001:9001"   # Interfaz web de MinIO
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # ─────────────────────────────────────────
+  # DATA API (replica local de la API del profesor)
+  # Disponible en http://localhost:8000
+  # ─────────────────────────────────────────
+  data-api:
+    build: ./data_api
+    container_name: mlops_data_api
+    volumes:
+      - ./data_api/data:/data
+    ports:
+      - "8000:80"
+
+  # ─────────────────────────────────────────
+  # AIRFLOW INIT
+  # Corre UNA sola vez al inicio para crear
+  # las tablas de Airflow y el usuario admin
+  # ─────────────────────────────────────────
+  airflow-init:
+    <<: *airflow-common
+    container_name: mlops_airflow_init
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db init
+        airflow users create \
+          --username admin \
+          --password admin123 \
+          --firstname Admin \
+          --lastname User \
+          --role Admin \
+          --email admin@admin.com
+        echo "Airflow inicializado correctamente"
+
+  # ─────────────────────────────────────────
+  # AIRFLOW WEBSERVER
+  # La interfaz web de Airflow
+  # Disponible en http://localhost:8080
+  # ─────────────────────────────────────────
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: mlops_airflow_webserver
+    command: webserver
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres-airflow:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ─────────────────────────────────────────
+  # AIRFLOW SCHEDULER
+  # El proceso que ejecuta los DAGs
+  # segun el horario programado
+  # ─────────────────────────────────────────
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: mlops_airflow_scheduler
+    command: scheduler
+    depends_on:
+      postgres-airflow:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+
+# Volumenes: donde Docker guarda los datos
+# aunque el contenedor se apague o reinicie
+volumes:
+  postgres_data:
+  postgres_airflow_data:
+  minio_data:
