@@ -6,6 +6,9 @@ __pycache__/
 *.pyc
 *.pyo
 
+# Modelos entrenados (artefactos — se guardan en MinIO, no en el repo)
+*.pkl
+
 # Estado en tiempo de ejecución de la Data API
 data_api/data/timestamps.json
 
