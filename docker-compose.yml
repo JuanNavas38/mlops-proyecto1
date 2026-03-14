@@ -100,6 +100,20 @@ services:
       - "8000:80"
 
   # ─────────────────────────────────────────
+  # INFERENCE API
+  # Carga el modelo de MinIO y expone /predict
+  # Disponible en http://localhost:8001
+  # ─────────────────────────────────────────
+  inference-api:
+    build: ./inference_api
+    container_name: mlops_inference_api
+    ports:
+      - "8001:80"
+    depends_on:
+      minio:
+        condition: service_healthy
+
+  # ─────────────────────────────────────────
   # AIRFLOW INIT
   # Corre UNA sola vez al inicio para crear
   # las tablas de Airflow y el usuario admin
