@@ -294,4 +294,4 @@ docker compose down -v
 | DAG recolección de datos | Completo |
 | Pipeline PostgreSQL (3 etapas) | Completo |
 | DAG entrenamiento + MinIO | Completo |
-| Inference API (FastAPI) | Pendiente |
+| Inference API (FastAPI) | Completo |
