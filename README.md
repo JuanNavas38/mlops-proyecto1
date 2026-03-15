@@ -107,6 +107,7 @@ El sistema sigue una **arquitectura de microservicios** — cada componente hace
 | MinIO Console | 9001 | Interfaz para gestionar modelos almacenados |
 | MinIO API | 9000 | API S3-compatible para subir/bajar modelos |
 | Data API | 8000 | Réplica local de la API del profesor |
+| Inference API | 8001 | API de predicción del tipo de cobertura forestal |
 | PostgreSQL (proyecto) | 5432 | Base de datos con los datos del pipeline |
 
 ---
@@ -206,6 +207,45 @@ check_data → train_model → save_to_minio
 
 ---
 
+## Inference API
+
+Expuesta en `http://localhost:8001`. Al arrancar carga automáticamente el modelo más reciente de MinIO.
+
+### Endpoints
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `GET /` | `/` | Health check — confirma que la API está viva y qué modelo tiene cargado |
+| `POST /predict` | `/predict` | Recibe datos crudos y devuelve la predicción |
+
+### Ejemplo de predicción
+
+```bash
+curl -X POST http://localhost:8001/predict \
+  -H "Content-Type: application/json" \
+  -d '{
+    "elevation": 2596, "aspect": 51, "slope": 3,
+    "horizontal_distance_to_hydrology": 258,
+    "vertical_distance_to_hydrology": 0,
+    "horizontal_distance_to_roadways": 510,
+    "hillshade_9am": 221, "hillshade_noon": 232, "hillshade_3pm": 148,
+    "horizontal_distance_to_fire_points": 6279,
+    "wilderness_area": "Rawah", "soil_type": "Cathedral"
+  }'
+```
+
+### Respuesta
+
+```json
+{
+  "cover_type": 2,
+  "cover_type_name": "Lodgepole Pine",
+  "model_used": "model_20260314_211612.pkl"
+}
+```
+
+---
+
 ## Requisitos
 
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) instalado y corriendo
@@ -245,6 +285,7 @@ Todos los servicios deben aparecer como `Up`. `mlops_airflow_init` desaparece al
 | Airflow | http://localhost:8080 | admin | admin123 |
 | MinIO Console | http://localhost:9001 | minioadmin | minioadmin123 |
 | Data API docs | http://localhost:8000/docs | — | — |
+| Inference API docs | http://localhost:8001/docs | — | — |
 
 ### 5. Activar la recolección de datos
 
