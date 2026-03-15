@@ -83,20 +83,7 @@ MinIO es un sistema de almacenamiento de objetos compatible con S3 de AWS, pero 
 
 ## Arquitectura
 
-El sistema sigue una **arquitectura de microservicios** — cada componente hace una sola cosa y se comunica con los demás por red. Esto permite reemplazar, escalar o modificar cada parte de forma independiente.
 
-```
-Data API ──► Airflow (DAG cada 5 min) ──► PostgreSQL (3 etapas)
-                                                  │
-                                                  ▼
-                                      DAG de entrenamiento (manual)
-                                                  │
-                                                  ▼
-                                         MinIO (modelos .pkl)
-                                                  │
-                                                  ▼
-                                      Inference API (FastAPI)
-```
 
 ### ¿Por qué cada componente?
 
