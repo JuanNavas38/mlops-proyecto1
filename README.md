@@ -83,6 +83,10 @@ MinIO es un sistema de almacenamiento de objetos compatible con S3 de AWS, pero 
 
 ## Arquitectura
 
+El sistema sigue una **arquitectura de microservicios** — cada componente hace una sola cosa y se comunica con los demás por red. Lo opuesto sería un sistema monolítico donde todo está junto en un solo proceso. Esta separación permite reemplazar, escalar o modificar cada parte de forma independiente sin afectar al resto.
+
+![Arquitectura del sistema](Arquitectura.png)
+
 
 
 ### ¿Por qué cada componente?
