@@ -5,6 +5,7 @@ from botocore.exceptions import ClientError
 import boto3
 import pickle
 import numpy as np
+import os
 
 # ── Mappings — deben ser idénticos a los del DAG de recolección ────────────
 # La regla de oro: los datos de inferencia deben transformarse
@@ -38,7 +39,7 @@ COVER_TYPE_NAMES = {
 
 # ── Configuración MinIO ─────────────────────────────────────────────────────
 MINIO_CONFIG = {
-    "endpoint_url": "http://minio:9000",
+    "endpoint_url": os.environ.get("MINIO_ENDPOINT", "http://minio:9000"),
     "aws_access_key_id": "minioadmin",
     "aws_secret_access_key": "minioadmin123",
     "config": Config(signature_version="s3v4")

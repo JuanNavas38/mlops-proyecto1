@@ -29,11 +29,10 @@ El sistema recolecta automáticamente datos del dataset *Forest Cover Type* a tr
 Docker es un programa que crea ambientes aislados llamados **contenedores**. Cada contenedor tiene su propio sistema de archivos, procesos y red — como una máquina virtual muy liviana.
 
 ```
-Tu computadora (Windows)
-└── Docker Desktop
-    ├── contenedor: mlops_postgres       ← tiene PostgreSQL adentro
+Tu computadora (Windows)                     VM Rocky Linux (10.43.101.82)
+└── Docker Desktop                           └── Docker
+    ├── contenedor: mlops_postgres               └── contenedor: mlops_minio  ← MinIO en VM
     ├── contenedor: mlops_airflow_webserver
-    ├── contenedor: mlops_minio
     └── ... etc
 ```
 
@@ -44,11 +43,11 @@ Tu computadora (Windows)
 Los datos **no** están en una carpeta visible de tu computadora. Están en **volúmenes de Docker** — ubicaciones internas gestionadas por Docker dentro de WSL 2 (un mini Linux que Docker Desktop instala automáticamente en Windows).
 
 ```
-Tu carpeta del proyecto (visible)     Docker (invisible)
-├── docker-compose.yml                ├── volumen: postgres_data      ← 63,910 filas
-├── dags/                             ├── volumen: postgres_airflow_data
-├── data_api/                         └── volumen: minio_data         ← modelos .pkl
-└── init_db/
+Tu carpeta del proyecto (visible)     Docker local (invisible)           VM Rocky Linux
+├── docker-compose.yml                ├── volumen: postgres_data          └── ~/minio/data/
+├── dags/                             └── volumen: postgres_airflow_data      └── models/
+├── data_api/                                                                     ├── model_*.pkl
+└── init_db/                                                                      └── model_*.json
 ```
 
 Los volúmenes persisten aunque apagues los contenedores. Solo se borran con `docker compose down -v`.
@@ -77,7 +76,9 @@ Los verbos más comunes son `GET` (pedir datos) y `POST` (enviar datos para proc
 
 ### ¿Qué es MinIO?
 
-MinIO es un sistema de almacenamiento de objetos compatible con S3 de AWS, pero que corre localmente. Es el lugar correcto para guardar archivos binarios grandes como modelos entrenados (`.pkl`), en lugar de meterlos en una base de datos relacional.
+MinIO es un sistema de almacenamiento de objetos compatible con S3 de AWS. Es el lugar correcto para guardar archivos binarios grandes como modelos entrenados (`.pkl`), en lugar de meterlos en una base de datos relacional.
+
+En este proyecto, MinIO **corre en una VM Rocky Linux** (`10.43.101.82`) como contenedor Docker, en lugar de correr localmente. Los servicios locales (Airflow, Inference API) se conectan a él a través de un **túnel SSH** que redirige el puerto 9000 de la VM al localhost de la máquina local.
 
 ---
 
@@ -101,14 +102,14 @@ El sistema sigue una **arquitectura de microservicios** — cada componente hace
 
 ### Servicios
 
-| Servicio | Puerto | Descripción |
-|---|---|---|
-| Airflow Webserver | 8080 | Interfaz para monitorear y ejecutar DAGs |
-| MinIO Console | 9001 | Interfaz para gestionar modelos almacenados |
-| MinIO API | 9000 | API S3-compatible para subir/bajar modelos |
-| Data API | 8000 | Réplica local de la API del profesor |
-| Inference API | 8001 | API de predicción del tipo de cobertura forestal |
-| PostgreSQL (proyecto) | 5432 | Base de datos con los datos del pipeline |
+| Servicio | Puerto | Dónde corre | Descripción |
+|---|---|---|---|
+| Airflow Webserver | 8080 | PC local | Interfaz para monitorear y ejecutar DAGs |
+| MinIO Console | 9001 | VM Rocky Linux | Interfaz para gestionar modelos almacenados |
+| MinIO API | 9000 | VM Rocky Linux | API S3-compatible para subir/bajar modelos |
+| Data API | 8000 | PC local | Réplica local de la API del profesor |
+| Inference API | 8001 | PC local | API de predicción del tipo de cobertura forestal |
+| PostgreSQL (proyecto) | 5432 | PC local | Base de datos con los datos del pipeline |
 
 ---
 
@@ -250,6 +251,7 @@ curl -X POST http://localhost:8001/predict \
 
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) instalado y corriendo
 - Git
+- Acceso VPN a la red Javeriana (para conectarse a la VM con MinIO)
 
 ---
 
@@ -262,7 +264,17 @@ git clone https://github.com/JuanNavas38/mlops-proyecto1.git
 cd mlops-proyecto1
 ```
 
-### 2. Levantar todos los servicios
+### 2. Abrir el túnel SSH hacia MinIO (VM Rocky Linux)
+
+MinIO corre en la VM `10.43.101.82`. Es necesario abrir un túnel SSH **antes** de levantar el docker-compose, y mantenerlo abierto mientras el sistema esté en uso:
+
+```bash
+ssh -L 9000:localhost:9000 -L 9001:localhost:9001 -N estudiante@10.43.101.82
+```
+
+> Requiere tener la VPN de la Javeriana activa. Dejar esta terminal abierta.
+
+### 3. Levantar todos los servicios
 
 ```bash
 docker compose up -d
@@ -326,6 +338,16 @@ docker compose down -v
 
 ---
 
+## MinIO en VM Rocky Linux — Evidencia
+
+MinIO corre como contenedor Docker en la VM `10.43.101.82` (Rocky Linux). Los modelos entrenados por Airflow se almacenan en el bucket `models` de esa VM y son accesibles desde la Inference API local a través del túnel SSH.
+
+La siguiente imagen muestra el bucket `models` con el modelo entrenado (`model_20260317_023641.pkl`, 282.1 MiB) y sus métricas (`.json`) almacenados en la VM:
+
+![Evidencia MinIO en VM Rocky Linux](Evidencia%20minio%20VM.png)
+
+---
+
 ## Estado del proyecto
 
 | Componente | Estado |
@@ -336,3 +358,4 @@ docker compose down -v
 | Pipeline PostgreSQL (3 etapas) | Completo |
 | DAG entrenamiento + MinIO | Completo |
 | Inference API (FastAPI) | Completo |
+| MinIO en VM Rocky Linux | Completo |

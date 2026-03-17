@@ -12,6 +12,8 @@ x-airflow-common: &airflow-common
     AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
     # Librerias de Python que necesitan los DAGs
     _PIP_ADDITIONAL_REQUIREMENTS: 'psycopg2-binary boto3 scikit-learn pandas minio requests'
+    # Endpoint de MinIO (via tunel SSH: ssh -L 9000:localhost:9000 estudiante@10.43.101.82)
+    MINIO_ENDPOINT: 'http://host.docker.internal:9000'
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
@@ -65,29 +67,6 @@ services:
       start_period: 5s
 
   # ─────────────────────────────────────────
-  # MINIO
-  # Almacena los modelos entrenados
-  # Interfaz web en http://localhost:9001
-  # ─────────────────────────────────────────
-  minio:
-    image: minio/minio:latest
-    container_name: mlops_minio
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin123
-    volumes:
-      - minio_data:/data
-    ports:
-      - "9000:9000"   # API de MinIO (para subir/bajar archivos)
-      - "9001:9001"   # Interfaz web de MinIO
-    command: server /data --console-address ":9001"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
-
-  # ─────────────────────────────────────────
   # DATA API (replica local de la API del profesor)
   # Disponible en http://localhost:8000
   # ─────────────────────────────────────────
@@ -107,11 +86,10 @@ services:
   inference-api:
     build: ./inference_api
     container_name: mlops_inference_api
+    environment:
+      MINIO_ENDPOINT: 'http://host.docker.internal:9000'
     ports:
       - "8001:80"
-    depends_on:
-      minio:
-        condition: service_healthy
 
   # ─────────────────────────────────────────
   # AIRFLOW INIT
@@ -178,4 +156,3 @@ services:
 volumes:
   postgres_data:
   postgres_airflow_data:
-  minio_data:

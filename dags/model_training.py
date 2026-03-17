@@ -28,7 +28,7 @@ PG_CONN = {
 }
 
 MINIO_CONFIG = {
-    "endpoint_url": "http://minio:9000",
+    "endpoint_url": os.environ.get("MINIO_ENDPOINT", "http://minio:9000"),
     "aws_access_key_id": "minioadmin",
     "aws_secret_access_key": "minioadmin123",
     "config": Config(signature_version="s3v4")
