@@ -326,6 +326,66 @@ docker compose down -v
 
 ---
 
+## Evidencias de funcionamiento
+
+### 1. Airflow — lista de DAGs
+
+Ambos DAGs detectados y funcionando: `data_collection` (activo, schedule cada 5 min) y `model_training` (disparado manualmente, schedule None). Se pueden ver 11 ejecuciones exitosas, 1 en curso y 111 fallidas del DAG de recolección — las fallas corresponden a ejecuciones donde la API aún no había cambiado de batch (cooldown de 5 minutos).
+
+![Lista de DAGs](evidencias/airflow_dags_list.png)
+
+---
+
+### 2. Airflow — historial del DAG `data_collection`
+
+Vista Grid del DAG de recolección mostrando múltiples ejecuciones programadas. Los cuadros rojos son ejecuciones donde `fetch_data` falló por el cooldown de 5 minutos de la API — comportamiento esperado. Los cuadros verdes confirman ejecuciones exitosas donde se recolectaron y procesaron datos completos.
+
+![Grid data_collection](evidencias/airflow_data_collection_grid.png)
+
+---
+
+### 3. Airflow — DAG `model_training` exitoso
+
+El DAG de entrenamiento muestra 1 ejecución exitosa con las 3 tareas en verde (`check_data`, `train_model`, `save_to_minio`). Duración total: 14 segundos. Disparado manualmente el 2026-03-14 a las 21:14:40 UTC.
+
+![model_training details](evidencias/airflow_model_training_details.png)
+
+---
+
+### 4. Airflow — tareas del `model_training`
+
+Detalle de las 3 tareas del DAG de entrenamiento, todas en estado **success**: `check_data` (validó ≥58,000 filas en raw_data), `train_model` (entrenó el RandomForest) y `save_to_minio` (guardó el modelo en MinIO).
+
+![model_training tasks](evidencias/airflow_model_training_tasks.png)
+
+---
+
+### 5. MinIO — modelo guardado
+
+Bucket `models` con los dos archivos generados por el DAG de entrenamiento:
+- `model_20260314_211612.pkl` — modelo RandomForest serializado (180.2 MiB)
+- `model_20260314_211612.json` — métricas del modelo (236 B)
+
+![MinIO models](evidencias/minio_models.png)
+
+---
+
+### 6. PostgreSQL — datos recolectados
+
+Las 3 tablas del pipeline tienen exactamente **63,910 filas** cada una, confirmando que ningún dato se perdió en la limpieza ni en el One-Hot Encoding. Esto equivale a aproximadamente 11 ejecuciones exitosas del DAG de recolección.
+
+![PostgreSQL row counts](evidencias/postgresql_row_counts.png)
+
+---
+
+### 7. Inference API — predicción exitosa
+
+Petición `POST /predict` con datos de un punto del bosque. El modelo predice **cover_type 2 — Lodgepole Pine** usando el modelo `model_20260314_211612.pkl` cargado desde MinIO.
+
+![Inference API predict](evidencias/inference_api_predict.png)
+
+---
+
 ## Estado del proyecto
 
 | Componente | Estado |
